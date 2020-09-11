@@ -1,0 +1,87 @@
+apply plugin: 'kotlin-multiplatform'
+apply plugin: 'kotlinx-serialization'
+
+kotlin {
+    targets {
+        iosX64("ios")
+
+        configure([
+                ios
+        ]) {
+            binaries.framework {
+                baseName = 'common'
+            }
+        }
+
+        fromPreset(presets.jvm, 'android')
+    }
+
+    sourceSets {
+        commonMain.dependencies {
+            implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+            implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
+
+            implementation "org.jetbrains.kotlinx:kotlinx-serialization-runtime:${versions.serialization}"
+
+            implementation "io.ktor:ktor-client:${versions.ktor}"
+            implementation "io.ktor:ktor-client-json:${versions.ktor}"
+            implementation "io.ktor:ktor-client-serialization:${versions.ktor}"
+            implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core-common:${versions.coroutines}"
+        }
+
+
+        iosMain {
+            dependsOn commonMain
+            dependencies {
+                // HTTP
+                implementation "io.ktor:ktor-client-ios:${versions.ktor}"
+                implementation "io.ktor:ktor-client-json-native:${versions.ktor}"
+                implementation "io.ktor:ktor-client-serialization-native:${versions.ktor}"
+
+                // Coroutines
+                api "org.jetbrains.kotlinx:kotlinx-coroutines-core-native:${versions.coroutines}"
+
+                implementation "org.jetbrains.kotlinx:kotlinx-serialization-runtime-iosx64:${versions.serialization}"
+            }
+        }
+
+        androidMain.dependencies {
+            implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+            implementation "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
+
+            implementation "org.jetbrains.kotlinx:kotlinx-serialization-runtime:${versions.serialization}"
+
+            implementation "io.ktor:ktor-client-serialization-jvm:${versions.ktor}"
+            implementation "io.ktor:ktor-client-okhttp:${versions.ktor}"
+            implementation "com.squareup.okhttp3:logging-interceptor:4.0.1"
+
+            implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:${versions.coroutines}"
+        }
+    }
+}
+
+// This task attaches native framework built from ios module to Xcode project
+// (see iosApp directory). Don't run this task directly,
+// Xcode runs this task itself during its build process.
+// Before opening the project from iosApp directory in Xcode,
+// make sure all Gradle infrastructure exists (gradle.wrapper, gradlew).
+task copyFramework {
+    def buildType = project.findProperty('kotlin.build.type') ?: 'DEBUG'
+    def target = project.findProperty('kotlin.target') ?: 'ios'
+    dependsOn kotlin.targets."$target".binaries.getFramework(buildType).linkTask
+
+    doLast {
+        def srcFile = kotlin.targets."$target".binaries.getFramework(buildType).outputFile
+        def targetDir = getProperty('configuration.build.dir')
+        copy {
+            from srcFile.parent
+            into targetDir
+            include 'common.framework/**'
+            include 'common.framework.dSYM'
+        }
+    }
+}
+
+configurations {
+    compileClasspath
+}
